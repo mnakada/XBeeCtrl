@@ -343,8 +343,8 @@ int XBee::ReceivePacket(unsigned char *buf) {
   int count = 0; 
   do {
     int c = GetByte();
-    if(LogEnable) fprintf(stderr, "[%02x]", c & 0xff);
     if(c < 0) return c;
+    if(LogEnable) fprintf(stderr, "[%02x]", c & 0xff);
     if(c == 0x7e) break;
   } while(1);
   
