@@ -284,7 +284,7 @@ int XBee::SendAVRCommand(unsigned int addrL, unsigned char cmd, unsigned char *d
       ret = error = ReceivePacket(receiveBuf);
       if(error < 0) break;
 
-      if((receiveBuf[0] == 0x90) && (receiveBuf[12] == FrameID)) break;
+      if((receiveBuf[0] == 0x90) && (receiveBuf[12] == FrameID) && (receiveBuf[13] == cmd)) break;
 
       struct timeval now;
       gettimeofday(&now, NULL);

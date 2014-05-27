@@ -29,6 +29,8 @@ public:
   int ReceiveText(char *buf, int size);
   int SendATCommand(unsigned int addrL, const char *cmd, unsigned char *data = NULL, int size = 0, unsigned char *retBuf = NULL, int retSize = 0);
   int SendAVRCommand(unsigned int addrL, unsigned char cmd, unsigned char *data = NULL, int size = 0, unsigned char *retBuf = NULL, int retSize = 0);
+  int SendPacket(int len, unsigned char *buf);
+  int ReceivePacket(unsigned char *buf);
   int SendFirmware(const char *file);
   int GetMode() { return Mode; };
   int SetBaudRate(int bps);
@@ -37,13 +39,12 @@ public:
   int LeaveBootMode();
   void EnableLog() {LogEnable = 1;};
   void DisableLog() {LogEnable = 0;};
+  void SetTimeout(int t) {Timeout = t;};
   
 
 private:
   int CheckMode();
   int CheckBootMode();
-  int SendPacket(int len, unsigned char *buf);
-  int ReceivePacket(unsigned char *buf);
   int GetByte();
 
   static const unsigned int ADDRH = 0x0013a200;

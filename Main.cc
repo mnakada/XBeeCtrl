@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include "XBee.h"
 #include "Error.h"
@@ -41,7 +42,8 @@ int main(int argc, char **argv) {
     XBee.Finalize();
     return Error;
   }
-
+  XBee.EnableLog();
+  
   unsigned char avrcmd = 0;
   if(!strcmp(cmd, "irsend")) avrcmd = CmdIRSend;
   if(!strcmp(cmd, "hactrl")) avrcmd = CmdHACtrl;
@@ -57,6 +59,18 @@ int main(int argc, char **argv) {
   if(!strcmp(cmd, "reboot")) avrcmd = CmdRebootFW;
   if(!strcmp(cmd, "readm")) avrcmd = CmdReadMemory;
   if(!strcmp(cmd, "readf")) avrcmd = CmdReadFlash;
+  if(!strcmp(cmd, "cal")) avrcmd = CmdOSCCalibration;
+
+  if(!strcmp(cmd, "irrecv")) {
+    while(1) {
+      unsigned char retBuf[256];
+      int size = XBee.ReceivePacket(retBuf);
+      if((size > 0) && (retBuf[13] == CmdIRReceiveNotification)) {
+        for(int i = 15; i < size; i++) fprintf(stderr, "%02x ", retBuf[i]);
+        fprintf(stderr, "\n");
+      }
+    }
+  }
  
   if(avrcmd == 0) { // AT command
     fprintf(stderr, "ATX command\n");
@@ -96,8 +110,6 @@ int main(int argc, char **argv) {
     return Success;
   }
   
-  XBee.EnableLog();
-
   if(avrcmd == CmdTest2) {
     unsigned char *buf = (unsigned char *)malloc(1000);
     if(!buf) {
@@ -143,10 +155,6 @@ int main(int argc, char **argv) {
     free(buf);
     fprintf(stderr, "Complete.\n");
     return Success;
-    
-    
-
-  
   }
   
   if(avrcmd == CmdIRSend) { // irsend
@@ -284,6 +292,53 @@ int main(int argc, char **argv) {
     return Success;
   }    
 
+  if(avrcmd == CmdOSCCalibration) { // cal
+
+    XBee.DisableLog();
+    unsigned char buf[256];
+    int count = 5;
+    unsigned char calib = 0x47;
+    if(argc > 4) count = strtoul(argv[4], NULL, 10);
+    if(argc > 5) calib = strtoul(argv[5], NULL, 16);
+    
+    buf[0] = count;
+    buf[1] = calib;
+    unsigned char retBuf[256];
+    int ret = XBee.SendAVRCommand(addrl, avrcmd, buf, 2, retBuf, 256);
+    if((ret < 0) || (retBuf[0] & 0x80)) {
+      fprintf(stderr, "\nret=%02x\n", ret);
+    }
+    struct timeval last;
+    gettimeofday(&last, NULL);
+    int n = 0;
+    int ave = 0;
+    while(n < count) {
+      int error = Error;
+      while(1) {
+        error = XBee.ReceivePacket(retBuf);
+        if(error < 0) break;
+        if((retBuf[0] == 0x90) && (retBuf[13] == CmdCalibrateNotification)) break;
+      }
+      if(error > 0) {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        struct timeval dif;
+        timersub(&now, &last, &dif);
+        int ms = (dif.tv_usec + (dif.tv_sec * 1000 * 1000) + 500) / 1000;
+        int tick = (retBuf[15] <<  8) | retBuf[16];
+        if(n) ave += ms;
+        fprintf(stderr, "CalbNotification %d %d\n", ms, tick);
+        last = now;
+        n++;
+      }
+    }
+    fprintf(stderr, "Calib %d\n", ave / (count - 1));
+
+    XBee.Finalize();
+    fprintf(stderr, "Complete.\n");
+    return Success;
+  }
+  
   {
     fprintf(stderr, "AVR command\n");
     // other AVR command

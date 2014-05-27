@@ -18,6 +18,7 @@ enum Command {
   CmdRebootFW              = 0x04,
   CmdReadMemory            = 0x08,
   CmdReadFlash             = 0x09,
+  CmdOSCCalibration        = 0x0a,
 
   CmdIRSend                = 0x10 | CmdContinue,
   CmdHACtrl                = 0x12,
@@ -26,8 +27,10 @@ enum Command {
   CmdTest2                 = 0x21 | CmdContinue,
   
   CmdRebootNotification    = 0x80,
+  CmdCalibrateNotification = 0x8a,
 
   CmdHAChangeNotification  = 0x92,
+  CmdIRReceiveNotification = 0x94,
 };
 
 static const unsigned char SeqFinal = (1 << 7);
