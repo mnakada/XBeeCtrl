@@ -48,9 +48,8 @@ int main(int argc, char **argv) {
   if(!strcmp(cmd, "irsend")) avrcmd = CmdIRSend;
   if(!strcmp(cmd, "hactrl")) avrcmd = CmdHACtrl;
   if(!strcmp(cmd, "hastat")) avrcmd = CmdHAStat;
-  if(!strcmp(cmd, "test1")) avrcmd = CmdTest1;
-  if(!strcmp(cmd, "test2")) avrcmd = CmdTest2;
-  if(!strcmp(cmd, "test3")) avrcmd = 0x30;
+  if(!strcmp(cmd, "i2cw")) avrcmd = CmdI2CWrite;
+  if(!strcmp(cmd, "i2cr")) avrcmd = CmdI2CRead;
 
   if(!strcmp(cmd, "halt")) avrcmd = CmdHalt;
   if(!strcmp(cmd, "getver")) avrcmd = CmdGetVer;
@@ -106,53 +105,6 @@ int main(int argc, char **argv) {
       return Error;
     }
     XBee.Finalize();
-    fprintf(stderr, "Complete.\n");
-    return Success;
-  }
-  
-  if(avrcmd == CmdTest2) {
-    unsigned char *buf = (unsigned char *)malloc(1000);
-    if(!buf) {
-      fprintf(stderr, "malloc error\n");
-      XBee.Finalize();
-      return Error;
-    }
-    for(int i = 0; i < 500; i += 2) {
-      buf[i] = (0x1234 + i) >> 8;
-      buf[i + 1] = (0x1234 + i);
-    }
-    int size = 500;
-    int retry = 0;
-    int seq = 0;
-    int offset = 0;
-    while(size) {
-      int sz = size;
-      if(sz > 128) sz = 128;
-      
-      unsigned char buf2[129];
-      memcpy(buf2 + 1, buf + offset, sz);
-      buf2[0] = seq;
-      if(size == sz) buf2[0] |= SeqFinal;
-      unsigned char retBuf[1];
-      int ret = XBee.SendAVRCommand(addrl, avrcmd, buf2, sz + 1, retBuf, 1);
-      if((ret < 0) || (retBuf[0] & 0x80)) {
-        fprintf(stderr, "\nret=%02x\n", retBuf[0]);
-        retry++;
-        if(retry > 5) {
-          fprintf(stderr, "Retry Error\n");
-          XBee.Finalize();
-          free(buf);
-          return Error;
-        }
-      } else {
-        retry = 0;
-        seq++;
-        size -= sz;
-        offset += sz;
-      }
-    }
-    XBee.Finalize();
-    free(buf);
     fprintf(stderr, "Complete.\n");
     return Success;
   }

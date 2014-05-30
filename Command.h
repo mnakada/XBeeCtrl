@@ -16,19 +16,21 @@ enum Command {
   CmdBoot                  = 0x02,
   CmdUpdate                = 0x03,
   CmdRebootFW              = 0x04,
+  CmdEraseFW               = 0x05,
   CmdReadMemory            = 0x08,
   CmdReadFlash             = 0x09,
   CmdOSCCalibration        = 0x0a,
-
+  
   CmdIRSend                = 0x10 | CmdContinue,
   CmdHACtrl                = 0x12,
   CmdHAStat                = 0x13,
-  CmdTest1                 = 0x20,
-  CmdTest2                 = 0x21 | CmdContinue,
+  CmdI2CWrite              = 0x20,
+  CmdI2CRead               = 0x21,
   
   CmdRebootNotification    = 0x80,
+  CmdBootModeNotification  = 0x82,
   CmdCalibrateNotification = 0x8a,
-
+  
   CmdHAChangeNotification  = 0x92,
   CmdIRReceiveNotification = 0x94,
 };
@@ -42,9 +44,5 @@ static const unsigned char RebootPowerOn    = (1 << 0);
 static const unsigned char RebootReset      = (1 << 1);
 static const unsigned char RebootLowVoltage = (1 << 2);
 static const unsigned char RebootWDT        = (1 << 3);
-
-static const unsigned char ReasonLowPower = 1;
-static const unsigned char ReasonAutoShutdown = 2;
-static const unsigned char ReasonPowerSW = 3;
 
 #endif // __Command_h__
