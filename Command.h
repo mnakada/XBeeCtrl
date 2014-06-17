@@ -24,6 +24,7 @@ enum Command {
   CmdIRSend                = 0x10 | CmdContinue,
   CmdHACtrl                = 0x12,
   CmdHAStat                = 0x13,
+  CmdGetADC                = 0x14,
   CmdI2CWrite              = 0x20,
   CmdI2CRead               = 0x21,
   

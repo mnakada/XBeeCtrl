@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
   if(!strcmp(cmd, "irsend")) avrcmd = CmdIRSend;
   if(!strcmp(cmd, "hactrl")) avrcmd = CmdHACtrl;
   if(!strcmp(cmd, "hastat")) avrcmd = CmdHAStat;
+  if(!strcmp(cmd, "adc")) avrcmd = CmdGetADC;
   if(!strcmp(cmd, "i2cw")) avrcmd = CmdI2CWrite;
   if(!strcmp(cmd, "i2cr")) avrcmd = CmdI2CRead;
 
@@ -244,6 +245,22 @@ int main(int argc, char **argv) {
     return Success;
   }    
 
+  if(avrcmd == CmdGetADC) { // adc
+    unsigned char retBuf[256];
+    int ret = XBee.SendAVRCommand(addrl, avrcmd, NULL, 0, retBuf, 256);
+    if((ret < 0) || (retBuf[0] & 0x80)) {
+      fprintf(stderr, "\nret=%02x\n", ret);
+    } else {
+      for(int i = 1; i < ret; i += 2) {
+        fprintf(stderr, "%d ", (retBuf[i] << 8) | retBuf[i + 1]);
+      }
+      fprintf(stderr, "\n");
+    }
+    XBee.Finalize();
+    fprintf(stderr, "Complete.\n");
+    return Success;
+  }    
+  
   if(avrcmd == CmdOSCCalibration) { // cal
 
     XBee.DisableLog();
