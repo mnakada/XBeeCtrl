@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
   if(!strcmp(cmd, "adc")) avrcmd = CmdGetADC;
   if(!strcmp(cmd, "i2cw")) avrcmd = CmdI2CWrite;
   if(!strcmp(cmd, "i2cr")) avrcmd = CmdI2CRead;
+  if(!strcmp(cmd, "led")) avrcmd = CmdLEDTape;
 
   if(!strcmp(cmd, "halt")) avrcmd = CmdHalt;
   if(!strcmp(cmd, "getver")) avrcmd = CmdGetVer;
@@ -245,6 +246,34 @@ int main(int argc, char **argv) {
     return Success;
   }    
 
+  if(avrcmd == CmdLEDTape) { // readm, readf
+    if(argc < 6) {
+      XBee.Finalize();
+      fprintf(stderr, "Illegal Parameter\n");
+      return Error;
+    }
+    unsigned char buf[4];
+    buf[0] = strtoul(argv[4], NULL, 10);
+    unsigned int color = strtoul(argv[5], NULL, 16);
+    buf[1] = color >> 16;
+    buf[2] = color >> 8;
+    buf[3] = color;
+    
+    unsigned char retBuf[256];
+    int ret = XBee.SendAVRCommand(addrl, avrcmd, buf, 4, retBuf, 256);
+    if((ret < 0) || (retBuf[0] & 0x80)) {
+      fprintf(stderr, "\nret=%02x\n", ret);
+    } else {
+      for(int i = 1; i < ret; i++) {
+        fprintf(stderr, "%02x ", retBuf[i]);
+      }
+      fprintf(stderr, "\n");
+    }
+    XBee.Finalize();
+    fprintf(stderr, "Complete.\n");
+    return Success;
+  }    
+  
   if(avrcmd == CmdGetADC) { // adc
     unsigned char retBuf[256];
     int ret = XBee.SendAVRCommand(addrl, avrcmd, NULL, 0, retBuf, 256);
