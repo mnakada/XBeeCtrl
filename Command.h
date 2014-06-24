@@ -27,6 +27,7 @@ enum Command {
   CmdHAStat                    = 0x13,
   CmdGetADC                    = 0x14,
   CmdLEDTape                   = 0x15,
+  CmdValidateHA2               = 0x16,
   CmdI2CWrite                  = 0x20,
   CmdI2CRead                   = 0x21,
   

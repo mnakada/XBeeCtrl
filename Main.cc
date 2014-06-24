@@ -16,6 +16,9 @@
 #include "Error.h"
 #include "Command.h"
 
+#define COLOR_RED "\033[31m"
+#define COLOR_DEFAULT "\033[0m"
+
 int main(int argc, char **argv) {
 
   if(argc < 4) {
@@ -61,6 +64,7 @@ int main(int argc, char **argv) {
   if(!strcmp(cmd, "readm")) avrcmd = CmdReadMemory;
   if(!strcmp(cmd, "readf")) avrcmd = CmdReadFlash;
   if(!strcmp(cmd, "cal")) avrcmd = CmdOSCCalibration;
+  if(!strcmp(cmd, "validate")) avrcmd = CmdValidateHA2;
 
   if(!strcmp(cmd, "irrecv")) {
     while(1) {
@@ -125,9 +129,10 @@ int main(int argc, char **argv) {
       free(buf);
       return Error;
     }
-    int size = fread(buf, 1, 1000, fp);
+    int size = fread(buf + 1, 1, 999, fp);
     fprintf(stderr, "file %s size %d\n", argv[4], size);
     fclose(fp);
+    buf[0] = 0;
     
     int retry = 0;
     int seq = 0;
@@ -285,6 +290,350 @@ int main(int argc, char **argv) {
       }
       fprintf(stderr, "\n");
     }
+    XBee.Finalize();
+    fprintf(stderr, "Complete.\n");
+    return Success;
+  }    
+  
+  if(avrcmd == CmdValidateHA2) { // validate
+    XBee.DisableLog();
+
+    int stat;
+    unsigned char retBuf[256];
+
+    buf[0] = 0;
+    buf[1] = 0;
+    int size = XBee.SendATCommand(addrl, "ic", buf, 2, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+
+    int ret = XBee.SendAVRCommand(addrl, avrcmd, NULL, 0, retBuf, 256);
+    if(ret < 0) {
+      fprintf(stderr, "\nret=%02x\n", ret);
+    } else {
+      stat = (retBuf[1] << 8) | retBuf[2];
+      if(stat & (1 << 0)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[3] << 8) | retBuf[4]) * 3300 / 1024); 
+      if(stat & (1 << 1)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[5] << 8) | retBuf[6]) * 3300 / 1024); 
+      if(stat & (1 << 2)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[7] << 8) | retBuf[8]) * 3300 / 1024); 
+      if(stat & (1 << 3)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[9] << 8) | retBuf[10]) * 3300 / 1024);
+      if(stat & (1 << 4)) fprintf(stderr, COLOR_RED "IRH,IRL(PD5)=Hi -> SW1(PB0)=Low\n" COLOR_DEFAULT);
+      if(stat & (1 << 5)) fprintf(stderr, COLOR_RED "IRH,IRL(PD5)=Hi -> SW3(PB2)=Low\n" COLOR_DEFAULT);
+      if(stat & (1 << 6)) fprintf(stderr, COLOR_RED "IRH,IRL(PD5)=Low -> SW1(PB0)=Hi\n" COLOR_DEFAULT);
+      if(stat & (1 << 7)) fprintf(stderr, COLOR_RED "IRH,IRL(PD5)=Low -> SW3(PB2)=Hi\n" COLOR_DEFAULT);
+      if(stat & (1 << 8)) fprintf(stderr, COLOR_RED "HA1C(PC0)=Hi, HA2C(PC2)=Low -> HA1M(PC1) = Low\n" COLOR_DEFAULT);
+      if(stat & (1 << 9)) fprintf(stderr, COLOR_RED "HA1C(PC0)=Hi, HA2C(PC2)=Low -> HA2M(PC3) = Hi\n" COLOR_DEFAULT);
+      if(stat & (1 << 10)) fprintf(stderr, COLOR_RED "HA1C(PC0)=Low, HA2C(PC2)=Hi -> HA1M(PC1) = Hi\n" COLOR_DEFAULT);
+      if(stat & (1 << 11)) fprintf(stderr, COLOR_RED "HA1C(PC0)=Low, HA2C(PC2)=Hi -> HA2M(PC3) = Low\n" COLOR_DEFAULT);
+      if(!stat) fprintf(stderr, "AVR Validate command -> OK\n");
+    }
+
+    // XBee Test
+    // GPIO1(DIO3)=Hi, GPIO2(DIO4)=Low -> AD1=770mV, AD2=0mV
+    stat = 0;
+    buf[0] = 2;
+    size = XBee.SendATCommand(addrl, "d1", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    size = XBee.SendATCommand(addrl, "d2", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 5;
+    size = XBee.SendATCommand(addrl, "d3", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "d4", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    size = XBee.SendATCommand(addrl, "is", buf, 0, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    if((retBuf[4] & 6) != 6) {
+      fprintf(stderr, "IS Error %02x\n", retBuf[4]);
+      XBee.Finalize();
+      return Error;
+    }
+    int ad1 = ((retBuf[7] << 8) | retBuf[8]) * 1200 / 1024;
+    int ad2 = ((retBuf[9] << 8) | retBuf[10]) * 1200 / 1024;
+    if((ad1 < 718) | (ad1 > 821)) {
+      stat = 1;
+      fprintf(stderr, COLOR_RED "GPIO1(DIO3)=Hi, GPIO2(DIO4)=Low -> AD1=%dmV\n" COLOR_DEFAULT, ad1);
+    }
+    if(ad2 > 22) {
+      stat = 1;
+      fprintf(stderr, COLOR_RED "GPIO1(DIO3)=Hi, GPIO2(DIO4)=Low -> AD2=%dmV\n" COLOR_DEFAULT, ad2);
+    }
+    
+    //  GPIO1(DIO3)=Low, GPIO2(DIO4)=Hi -> AD1=0mV, AD2=770mV
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "d3", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 5;
+    size = XBee.SendATCommand(addrl, "d4", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    size = XBee.SendATCommand(addrl, "is", buf, 0, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    if((retBuf[4] & 6) != 6) {
+      fprintf(stderr, "IS Error %02x\n", retBuf[4]);
+      XBee.Finalize();
+      return Error;
+    }
+    ad1 = ((retBuf[7] << 8) | retBuf[8]) * 1200 / 1024;
+    ad2 = ((retBuf[9] << 8) | retBuf[10]) * 1200 / 1024;
+    if(ad1 > 22) {
+      stat = 1;
+      fprintf(stderr, COLOR_RED "GPIO1(DIO3)=Low, GPIO2(DIO4)=Hi -> AD1=%dmV\n" COLOR_DEFAULT, ad1);
+    }
+    if((ad2 < 718) | (ad2 > 821)) {
+      stat = 1;
+      fprintf(stderr, COLOR_RED "GPIO1(DIO3)=Low, GPIO2(DIO4)=Hi -> AD2=%dmV\n" COLOR_DEFAULT, ad2);
+    }
+    
+    buf[0] = 3;
+    size = XBee.SendATCommand(addrl, "d3", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 3;
+    size = XBee.SendATCommand(addrl, "d4", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    if(!stat) fprintf(stderr, "XBee GPIO1(DIO3), GPIO2(DIO4), AD1, AD2 -> OK\n" COLOR_DEFAULT);
+     
+    //  SW1(DIO10)=Hi, SW2(DIO11)=Low, SW3(DIO12)=Low -> DIO5=Hi, DIO6=Low, DIO7=Low
+    stat = 0;
+    buf[0] = 3;
+    size = XBee.SendATCommand(addrl, "d5", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 3;
+    size = XBee.SendATCommand(addrl, "d6", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 3;
+    size = XBee.SendATCommand(addrl, "d7", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 5;
+    size = XBee.SendATCommand(addrl, "p0", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "p1", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "p2", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    size = XBee.SendATCommand(addrl, "is", buf, 0, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    if((retBuf[3] & 0xe0) != 0xe0) {
+      fprintf(stderr, "IS Error %02x%02x\n", retBuf[2], retBuf[3]);
+      XBee.Finalize();
+      return Error;
+    }
+    if((retBuf[6] & 0x20) != 0x20) fprintf(stderr, COLOR_RED "SW1(DIO10)=Hi, SW2(DIO11)=Low, SW3(DIO12)=Low -> DIO5=Low\n" COLOR_DEFAULT);
+    if((retBuf[6] & 0x40) != 0x00) fprintf(stderr, COLOR_RED "SW1(DIO10)=Hi, SW2(DIO11)=Low, SW3(DIO12)=Low -> DIO6=Hi\n" COLOR_DEFAULT);
+    if((retBuf[6] & 0x80) != 0x00) fprintf(stderr, COLOR_RED "SW1(DIO10)=Hi, SW2(DIO11)=Low, SW3(DIO12)=Low -> DIO7=Hi\n" COLOR_DEFAULT);
+    if((retBuf[6] & 0xe0) != 0x20) stat = 1;
+
+    //  SW1(DIO10)=Low, SW2(DIO11)=Hi, SW3(DIO12)=Low -> DIO5=Low, DIO6=Hi, DIO7=Low
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "p0", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 5;
+    size = XBee.SendATCommand(addrl, "p1", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "p2", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    size = XBee.SendATCommand(addrl, "is", buf, 0, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    if((retBuf[3] & 0xe0) != 0xe0) {
+      fprintf(stderr, "IS Error %02x%02x\n", retBuf[2], retBuf[3]);
+      XBee.Finalize();
+      return Error;
+    }
+    if((retBuf[6] & 0x20) != 0x00) fprintf(stderr, COLOR_RED "SW1(DIO10)=Low, SW2(DIO11)=Hi, SW3(DIO12)=Low -> DIO5=Hi\n" COLOR_DEFAULT);
+    if((retBuf[6] & 0x40) != 0x40) fprintf(stderr, COLOR_RED "SW1(DIO10)=Low, SW2(DIO11)=Hi, SW3(DIO12)=Low -> DIO6=Low\n" COLOR_DEFAULT);
+    if((retBuf[6] & 0x80) != 0x00) fprintf(stderr, COLOR_RED "SW1(DIO10)=Low, SW2(DIO11)=Hi, SW3(DIO12)=Low -> DIO7=Hi\n" COLOR_DEFAULT);
+    if((retBuf[6] & 0xe0) != 0x40) stat = 1;
+
+    //  SW1(DIO10)=Low, SW2(DIO11)=Low, SW3(DIO12)=Hi -> DIO5=Low, DIO6=Low, DIO7=Hi
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "p0", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "p1", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 5;
+    size = XBee.SendATCommand(addrl, "p2", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    size = XBee.SendATCommand(addrl, "is", buf, 0, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    if((retBuf[3] & 0xe0) != 0xe0) {
+      fprintf(stderr, "IS Error %02x%02x\n", retBuf[2], retBuf[3]);
+      XBee.Finalize();
+      return Error;
+    }
+    if((retBuf[6] & 0x20) != 0x00) fprintf(stderr, COLOR_RED "SW1(DIO10)=Low, SW2(DIO11)=Low, SW3(DIO12)=Hi -> DIO5=Hi\n" COLOR_DEFAULT);
+    if((retBuf[6] & 0x40) != 0x00) fprintf(stderr, COLOR_RED "SW1(DIO10)=Low, SW2(DIO11)=Low, SW3(DIO12)=Hi -> DIO6=Hi\n" COLOR_DEFAULT);
+    if((retBuf[6] & 0x80) != 0x80) fprintf(stderr, COLOR_RED "SW1(DIO10)=Low, SW2(DIO11)=Low, SW3(DIO12)=Hi -> DIO7=Low\n" COLOR_DEFAULT);
+    if((retBuf[6] & 0xe0) != 0x80) stat = 1;
+
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "p2", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    if(!stat) fprintf(stderr, "SW1(DIO10->DIO5), SW2(DIO11->DIO6), SW3(DIO12->DIO7) -> OK\n");
+     
+    //  AVRReset(DIO0)=Low , AVRReset(DIO0)=Hi -> GetVer = 0x8xxx
+    stat = 0;
+    buf[0] = 4;
+    size = XBee.SendATCommand(addrl, "d0", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    buf[0] = 5;
+    size = XBee.SendATCommand(addrl, "d0", buf, 1, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    
+    usleep(500 * 1000);
+    size = XBee.SendAVRCommand(addrl, CmdGetVer, buf, 0, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    if(!(retBuf[1] & 0x80)) {
+      fprintf(stderr, COLOR_RED "AVR-Reset(DIO0) Low->Hi -> AVR boot mode error\n" COLOR_DEFAULT);
+      stat = 1;
+    }
+    int bootVer = (retBuf[1] << 8) | retBuf[2];
+   
+    //  AVRFWBoot
+    size = XBee.SendAVRCommand(addrl, CmdRebootFW, buf, 0, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    
+    usleep(500 * 1000);
+    size = XBee.SendAVRCommand(addrl, CmdGetVer, buf, 0, retBuf, 256);
+    if((size <= 0) || retBuf[0]) {
+      fprintf(stderr, "SendAT Error %02x\n", retBuf[0]);
+      XBee.Finalize();
+      return Error;
+    }
+    if((retBuf[1] & 0x80)) {
+      fprintf(stderr, COLOR_RED "AVRFWBoot -> AVR boot mode error\n" COLOR_DEFAULT);
+      stat = 1;
+    }
+    if(!stat) fprintf(stderr, "AVR-Reset(DIO0) -> OK\n");
+    
+    fprintf(stderr, "Boot Version %04x\n", bootVer);   
+    fprintf(stderr, "FW Version %02x%02x SetID %02x%02x\n", retBuf[1], retBuf[2], retBuf[3], retBuf[4]);   
+
     XBee.Finalize();
     fprintf(stderr, "Complete.\n");
     return Success;
