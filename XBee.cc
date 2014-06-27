@@ -265,7 +265,7 @@ int XBee::SendAVRCommand(unsigned int addrL, unsigned char cmd, unsigned char *d
   sendBuf[13] = 0x00;
   sendBuf[15] = cmd;
   if(size) memcpy(sendBuf + 16, data, size);
-  Timeout = 3000;
+  Timeout = 5000;
 
   int retry = 0;
   int ret = 0;
@@ -279,7 +279,7 @@ int XBee::SendAVRCommand(unsigned int addrL, unsigned char cmd, unsigned char *d
     unsigned char receiveBuf[256];
     struct timeval timeout;
     gettimeofday(&timeout, NULL);
-    timeout.tv_sec++;
+    timeout.tv_sec+= 5;
     while(1) {
       ret = error = ReceivePacket(receiveBuf);
       if(error < 0) break;

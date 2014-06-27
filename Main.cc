@@ -286,7 +286,7 @@ int main(int argc, char **argv) {
       fprintf(stderr, "\nret=%02x\n", ret);
     } else {
       for(int i = 1; i < ret; i += 2) {
-        fprintf(stderr, "%d ", (retBuf[i] << 8) | retBuf[i + 1]);
+        fprintf(stderr, "%dmV ", ((retBuf[i] << 8) | retBuf[i + 1]) * 3300 / 4096);
       }
       fprintf(stderr, "\n");
     }
@@ -314,11 +314,20 @@ int main(int argc, char **argv) {
     if(ret < 0) {
       fprintf(stderr, "\nret=%02x\n", ret);
     } else {
+
+#if 0
+      fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[3] << 8) | retBuf[4]) * 3300 / 4096); 
+      fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[5] << 8) | retBuf[6]) * 3300 / 4096); 
+      fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[7] << 8) | retBuf[8]) * 3300 / 4096); 
+      fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[9] << 8) | retBuf[10]) * 3300 / 4096);
+#endif
+
+
       stat = (retBuf[1] << 8) | retBuf[2];
-      if(stat & (1 << 0)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[3] << 8) | retBuf[4]) * 3300 / 1024); 
-      if(stat & (1 << 1)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[5] << 8) | retBuf[6]) * 3300 / 1024); 
-      if(stat & (1 << 2)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[7] << 8) | retBuf[8]) * 3300 / 1024); 
-      if(stat & (1 << 3)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[9] << 8) | retBuf[10]) * 3300 / 1024);
+      if(stat & (1 << 0)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[3] << 8) | retBuf[4]) * 3300 / 4096); 
+      if(stat & (1 << 1)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[5] << 8) | retBuf[6]) * 3300 / 4096); 
+      if(stat & (1 << 2)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[7] << 8) | retBuf[8]) * 3300 / 4096); 
+      if(stat & (1 << 3)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[9] << 8) | retBuf[10]) * 3300 / 4096);
       if(stat & (1 << 4)) fprintf(stderr, COLOR_RED "IRH,IRL(PD5)=Hi -> SW1(PB0)=Low\n" COLOR_DEFAULT);
       if(stat & (1 << 5)) fprintf(stderr, COLOR_RED "IRH,IRL(PD5)=Hi -> SW3(PB2)=Low\n" COLOR_DEFAULT);
       if(stat & (1 << 6)) fprintf(stderr, COLOR_RED "IRH,IRL(PD5)=Low -> SW1(PB0)=Hi\n" COLOR_DEFAULT);
