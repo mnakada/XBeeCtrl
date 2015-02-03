@@ -49,24 +49,25 @@ int main(int argc, char **argv) {
   
   unsigned char avrcmd = 0;
   if(!strcmp(cmd, "irsend")) avrcmd = CmdIRSend;
+  if(!strcmp(cmd, "irrec")) avrcmd = CmdIRRecord;
   if(!strcmp(cmd, "hactrl")) avrcmd = CmdHACtrl;
   if(!strcmp(cmd, "hastat")) avrcmd = CmdHAStat;
   if(!strcmp(cmd, "adc")) avrcmd = CmdGetADC;
+  if(!strcmp(cmd, "adcd")) avrcmd = CmdGetADCData;
   if(!strcmp(cmd, "i2cw")) avrcmd = CmdI2CWrite;
   if(!strcmp(cmd, "i2cr")) avrcmd = CmdI2CRead;
   if(!strcmp(cmd, "led")) avrcmd = CmdLEDTape;
 
-  if(!strcmp(cmd, "halt")) avrcmd = CmdHalt;
   if(!strcmp(cmd, "getver")) avrcmd = CmdGetVer;
   if(!strcmp(cmd, "boot")) avrcmd = CmdBoot;
   if(!strcmp(cmd, "update")) avrcmd = CmdUpdate;
   if(!strcmp(cmd, "reboot")) avrcmd = CmdRebootFW;
   if(!strcmp(cmd, "readm")) avrcmd = CmdReadMemory;
   if(!strcmp(cmd, "readf")) avrcmd = CmdReadFlash;
-  if(!strcmp(cmd, "cal")) avrcmd = CmdOSCCalibration;
   if(!strcmp(cmd, "validate")) avrcmd = CmdValidateHA2;
 
   if(!strcmp(cmd, "irrecv")) {
+    XBee.DisableLog();
     while(1) {
       unsigned char retBuf[256];
       int size = XBee.ReceivePacket(retBuf);
@@ -133,7 +134,8 @@ int main(int argc, char **argv) {
     fprintf(stderr, "file %s size %d\n", argv[4], size);
     fclose(fp);
     buf[0] = 0;
-    
+    size++;
+    if(argc >= 6) buf[0] = atoi(argv[5]); 
     int retry = 0;
     int seq = 0;
     int offset = 0;
@@ -226,32 +228,39 @@ int main(int argc, char **argv) {
       fprintf(stderr, "Illegal Parameter\n");
       return Error;
     }
-    unsigned char buf[3];
-    int addr = strtoul(argv[4], NULL, 16);
-    buf[0] = addr >> 8;
-    buf[1] = addr & 0xff;
+    XBee.DisableLog();
+    
     int size = 16;
+    int addr = strtoul(argv[4], NULL, 16);
     if(argc > 5) size = strtoul(argv[5], NULL, 16);
-    fprintf(stderr, "debug %d %d\n", size, argc);
-    if(size > 32) size = 32;
-    buf[2] = size;
-    unsigned char retBuf[256];
-    int ret = XBee.SendAVRCommand(addrl, avrcmd, buf, 3, retBuf, 256);
-    if((ret < 0) || (retBuf[0] & 0x80)) {
-      fprintf(stderr, "\nret=%02x\n", ret);
-    } else {
-      for(int i = 1; i < ret; i++) {
-        if((i % 16) == 1) fprintf(stderr, "\n%04x : ", addr - 1 + i);
-        fprintf(stderr, "%02x ", retBuf[i]);
+    while(size) {
+      int sz = size;
+      if(sz > 32) sz = 32;
+      unsigned char buf[3];
+      buf[0] = addr >> 8;
+      buf[1] = addr & 0xff;
+      buf[2] = sz;
+      unsigned char retBuf[256];
+      int ret = XBee.SendAVRCommand(addrl, avrcmd, buf, 3, retBuf, 256);
+      if((ret < 0) || (retBuf[0] & 0x80)) {
+        fprintf(stderr, "\nret=%02x\n", ret);
+      } else {
+        for(int i = 1; i < ret; i++) {
+          if(((i - 1) % 16) == 0) fprintf(stderr, "%04x : ", addr - 1 + i);
+          fprintf(stderr, "%02x ", retBuf[i]);
+          if(((i - 1) % 16) == 15) fprintf(stderr, "\n");
+        }
       }
-      fprintf(stderr, "\n");
+      size -= sz;
+      addr += sz;
     }
+    fprintf(stderr, "\n");
     XBee.Finalize();
     fprintf(stderr, "Complete.\n");
     return Success;
   }    
 
-  if(avrcmd == CmdLEDTape) { // readm, readf
+  if(avrcmd == CmdLEDTape) { // led 
     if(argc < 6) {
       XBee.Finalize();
       fprintf(stderr, "Illegal Parameter\n");
@@ -295,6 +304,63 @@ int main(int argc, char **argv) {
     return Success;
   }    
   
+  if(avrcmd == CmdGetADCData) { // adcd
+    if(argc < 5) {
+      XBee.Finalize();
+      fprintf(stderr, "Illegal Parameter\n");
+      return Error;
+    }
+    XBee.DisableLog();
+    
+    int ch = strtoul(argv[4], NULL, 10);
+    unsigned char buf[1];
+    buf[0] = ch;
+    unsigned char retBuf[256];
+    int ret = XBee.SendAVRCommand(addrl, avrcmd, buf, 1, retBuf, 256);
+    if((ret < 0) || (retBuf[0] & 0x80)) {
+      fprintf(stderr, "\nret=%02x\n", ret);
+    } else {
+      for(int i = 1; i < ret; i += 2) {
+        fprintf(stderr, "%d\n", ((retBuf[i] << 8) | retBuf[i + 1]) * 3300 / 4096);
+      }
+      fprintf(stderr, "\n");
+    }
+    fprintf(stderr, "\n");
+    XBee.Finalize();
+    fprintf(stderr, "Complete.\n");
+    return Success;
+  }    
+
+  if(avrcmd == CmdIRRecord) { // irrec
+    if(argc < 5) {
+      XBee.Finalize();
+      fprintf(stderr, "Illegal Parameter\n");
+      return Error;
+    }
+    
+    unsigned char buf[1];
+    buf[0] = 10;
+    unsigned char retBuf[256];
+    int ret = XBee.SendAVRCommand(addrl, avrcmd, buf, 1, retBuf, 256);
+    if((ret < 0) || (retBuf[0] & 0x80)) {
+      fprintf(stderr, "\nret=%02x\n", ret);
+    } else {
+      for(int i = 1; i < ret; i++) {
+        if((i % 16) == 1) fprintf(stderr, "\n");
+        fprintf(stderr, "%02x ", retBuf[i]);
+      }
+      fprintf(stderr, "\n");
+      FILE *fp = fopen(argv[4], "w");
+      if(fp) {
+        fwrite(retBuf + 1, 1, ret - 1, fp);
+        fclose(fp);
+      }
+    }
+    XBee.Finalize();
+    fprintf(stderr, "Complete.\n");
+    return Success;
+  }    
+  
   if(avrcmd == CmdValidateHA2) { // validate
     XBee.DisableLog();
 
@@ -314,15 +380,6 @@ int main(int argc, char **argv) {
     if(ret < 0) {
       fprintf(stderr, "\nret=%02x\n", ret);
     } else {
-
-#if 0
-      fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[3] << 8) | retBuf[4]) * 3300 / 4096); 
-      fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[5] << 8) | retBuf[6]) * 3300 / 4096); 
-      fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[7] << 8) | retBuf[8]) * 3300 / 4096); 
-      fprintf(stderr, COLOR_RED "GPIO1(PC4)=Low, GPIO2(PC5)=Hi -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[9] << 8) | retBuf[10]) * 3300 / 4096);
-#endif
-
-
       stat = (retBuf[1] << 8) | retBuf[2];
       if(stat & (1 << 0)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD1(ADC6)=%dmV\n" COLOR_DEFAULT, ((retBuf[3] << 8) | retBuf[4]) * 3300 / 4096); 
       if(stat & (1 << 1)) fprintf(stderr, COLOR_RED "GPIO1(PC4)=Hi, GPIO2(PC5)=Low -> AD2(ADC7)=%dmV\n" COLOR_DEFAULT, ((retBuf[5] << 8) | retBuf[6]) * 3300 / 4096); 
@@ -647,54 +704,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Complete.\n");
     return Success;
   }    
-  
-  if(avrcmd == CmdOSCCalibration) { // cal
-
-    XBee.DisableLog();
-    unsigned char buf[256];
-    int count = 5;
-    unsigned char calib = 0x47;
-    if(argc > 4) count = strtoul(argv[4], NULL, 10);
-    if(argc > 5) calib = strtoul(argv[5], NULL, 16);
     
-    buf[0] = count;
-    buf[1] = calib;
-    unsigned char retBuf[256];
-    int ret = XBee.SendAVRCommand(addrl, avrcmd, buf, 2, retBuf, 256);
-    if((ret < 0) || (retBuf[0] & 0x80)) {
-      fprintf(stderr, "\nret=%02x\n", ret);
-    }
-    struct timeval last;
-    gettimeofday(&last, NULL);
-    int n = 0;
-    int ave = 0;
-    while(n < count) {
-      int error = Error;
-      while(1) {
-        error = XBee.ReceivePacket(retBuf);
-        if(error < 0) break;
-        if((retBuf[0] == 0x90) && (retBuf[13] == CmdCalibrateNotification)) break;
-      }
-      if(error > 0) {
-        struct timeval now;
-        gettimeofday(&now, NULL);
-        struct timeval dif;
-        timersub(&now, &last, &dif);
-        int ms = (dif.tv_usec + (dif.tv_sec * 1000 * 1000) + 500) / 1000;
-        int tick = (retBuf[15] <<  8) | retBuf[16];
-        if(n) ave += ms;
-        fprintf(stderr, "CalbNotification %d %d\n", ms, tick);
-        last = now;
-        n++;
-      }
-    }
-    fprintf(stderr, "Calib %d\n", ave / (count - 1));
-
-    XBee.Finalize();
-    fprintf(stderr, "Complete.\n");
-    return Success;
-  }
-  
   {
     fprintf(stderr, "AVR command\n");
     // other AVR command
