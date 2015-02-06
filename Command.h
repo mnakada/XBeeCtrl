@@ -1,6 +1,6 @@
 /*
  HA-1 Command.h
- 
+
  Copyright: Copyright (C) 2013 Mitsuru Nakada All Rights Reserved.
  License: GNU GPL v2
  */
@@ -19,7 +19,7 @@ enum Command {
   CmdEraseFW                   = 0x05,
   CmdReadMemory                = 0x08,
   CmdReadFlash                 = 0x09,
-  
+
   CmdIRSend                    = 0x10 | CmdContinue,
   CmdGetGPI                    = 0x11,
   CmdHACtrl                    = 0x12,
@@ -33,10 +33,10 @@ enum Command {
 
   CmdI2CWrite                  = 0x20,
   CmdI2CRead                   = 0x21,
-  
+
   CmdRebootNotification        = 0x80,
   CmdBootModeNotification      = 0x82,
-   
+
   CmdStatusChangeNotification  = 0x92,
   CmdIRReceiveNotification     = 0x94,
   CmdKeypadNotification        = 0x99,
