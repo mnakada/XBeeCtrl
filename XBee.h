@@ -14,6 +14,7 @@ enum Mode {
   Mode_Unknown = 0,
   Mode_AT,
   Mode_API,
+  Mode_API2,
   Mode_Boot,
 };
 
@@ -46,7 +47,9 @@ private:
   int CheckMode();
   int CheckBootMode();
   int GetByte();
-
+  int GetByteWithEsc();
+  void AddBufferWithEsc(unsigned char *buf, int *p, unsigned char d);
+  
   static const unsigned int ADDRH = 0x0013a200;
   int FrameID;
   
@@ -55,6 +58,7 @@ private:
   int Mode;
   int Timeout;
   int LogEnable;
+  unsigned char EscapedFlag;
   
   static const unsigned char SOH = 0x01;
   static const unsigned char STX = 0x02;

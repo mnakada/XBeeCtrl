@@ -24,6 +24,7 @@ XBee::XBee() {
   Mode = Mode_Unknown;
   Timeout = 100;
   LogEnable = 0;
+  EscapedFlag = 0;
 }
 
 XBee::~XBee() {
@@ -41,7 +42,7 @@ int XBee::Initialize(const char *device) {
     }
   }
   
-  Timeout = 20;
+  Timeout = 200;
   int error = Error;
   BaudRate = B9600;
   if(SetBaudRate(BaudRate)) return Error;
@@ -53,17 +54,17 @@ int XBee::Initialize(const char *device) {
   }
   if(error) error = CheckBootMode();
   if(error) {
-    BaudRate = B57600;
-    if(SetBaudRate(BaudRate)) return Error;
-    error = CheckMode();
-  }
-  if(error) {
     BaudRate = B38400;
     if(SetBaudRate(BaudRate)) return Error;
     error = CheckMode();
   }
   if(error) {
     BaudRate = B19200;
+    if(SetBaudRate(BaudRate)) return Error;
+    error = CheckMode();
+  }
+  if(error) {
+    BaudRate = B57600;
     if(SetBaudRate(BaudRate)) return Error;
     error = CheckMode();
   }
@@ -118,9 +119,11 @@ int XBee::CheckMode() {
     return Success;
   }
   
-  size = SendATCommand(0, "VR");
-  if(size != 3) return Error;
+  unsigned char retBuf[16];
+  size = SendATCommand(0, "AP", NULL, 0, retBuf, 16);
+  if(size != 2) return Error;
   Mode = Mode_API;
+  if(retBuf[1] == 2) Mode = Mode_API2;
   return Success;
 }
 
@@ -265,7 +268,7 @@ int XBee::SendAVRCommand(unsigned int addrL, unsigned char cmd, unsigned char *d
   sendBuf[13] = 0x00;
   sendBuf[15] = cmd;
   if(size) memcpy(sendBuf + 16, data, size);
-  Timeout = 5000;
+  Timeout = 3000;
 
   int retry = 0;
   int ret = 0;
@@ -279,7 +282,7 @@ int XBee::SendAVRCommand(unsigned int addrL, unsigned char cmd, unsigned char *d
     unsigned char receiveBuf[256];
     struct timeval timeout;
     gettimeofday(&timeout, NULL);
-    timeout.tv_sec+= 5;
+    timeout.tv_sec++;
     while(1) {
       ret = error = ReceivePacket(receiveBuf);
       if(error < 0) break;
@@ -307,33 +310,39 @@ int XBee::SendAVRCommand(unsigned int addrL, unsigned char cmd, unsigned char *d
   return Error;
 }
 
+void XBee::AddBufferWithEsc(unsigned char *buf, int *p, unsigned char d) {
+
+  if(Mode == Mode_API2) {  
+    if((d == 0x7e) || (d == 0x7d) || (d == 0x11) || (d == 0x13)) {
+      d ^= 0x20;
+      buf[(*p)++] = 0x7d;
+    }
+  }
+  buf[(*p)++] = d;
+}
+
 int XBee::SendPacket(int len, unsigned char *buf) {
   
-  unsigned char sendBuf[4];
-  sendBuf[0] = 0x7e;
-  sendBuf[1] = len >> 8;
-  sendBuf[2] = len;
-  unsigned char sum = 0;
-  for(int i = 0; i < len; i++) sum+=buf[i];
-  sendBuf[3] = 0xff - sum;
-  int num = write(UartFd, sendBuf, 3);
-  if(num != 3) return Error;
+  if(len > 255) return Error;
   
-  if(LogEnable) {
-    for(int i = 0; i < 3; i++) fprintf(stderr, "<%02x>", sendBuf[i]);
+  unsigned char sendBuf[520];
+  int p = 0;
+  sendBuf[p++] = 0x7e;
+  AddBufferWithEsc(sendBuf, &p, len >> 8);
+  AddBufferWithEsc(sendBuf, &p, len);
+  unsigned char sum = 0;
+  for(int i = 0; i < len; i++) {
+    sum += buf[i];
+    AddBufferWithEsc(sendBuf, &p, buf[i]);
   }
-  num = write(UartFd, buf, len);
-  if(num != len) return Error;
+  AddBufferWithEsc(sendBuf, &p, 0xff - sum);
+
+  int num = write(UartFd, sendBuf, p);
+  if(num != p) return Error;
   
   if(LogEnable) {
     for(int i = 0; i < len; i++) fprintf(stderr, "<%02x>", buf[i]);
-  }
-  num = write(UartFd, sendBuf + 3, 1);
-  if(num != 1) return Error;
-  
-  if(LogEnable) {
-    for(int i = 3; i < 4; i++) fprintf(stderr, "<%02x>", sendBuf[i]);
-   fprintf(stderr, "\n");
+    fprintf(stderr, "\n");
   }
   return Success;
 }
@@ -348,24 +357,24 @@ int XBee::ReceivePacket(unsigned char *buf) {
     if(c == 0x7e) break;
   } while(1);
   
-  int len1 = GetByte();
+  int len1 = GetByteWithEsc();
   if(len1 < 0) return len1;
   if(LogEnable) fprintf(stderr, "[%02x]", len1);
   
-  int len = GetByte();
+  int len = GetByteWithEsc();
   if(len < 0) return len;
   len |= len1 << 8;
   if(LogEnable) fprintf(stderr, "[%02x]", len);
   
   int sum = 0;
   for(int i = 0; i < len; i++) {
-    int dat = GetByte();
+    int dat = GetByteWithEsc();
     if(dat < 0) return dat;
     if(LogEnable) fprintf(stderr, "[%02x]", dat);
     buf[i] = dat;
     sum += dat;
   }
-  int csum = GetByte();
+  int csum = GetByteWithEsc();
   if(csum < 0) return csum;
   sum += csum;
   if(LogEnable) fprintf(stderr, "[%02x]\n", csum);
@@ -511,3 +520,17 @@ int XBee::GetByte() {
   } while(1);
 }
 
+int XBee::GetByteWithEsc() {
+
+  int d = GetByte();
+  if(Mode != Mode_API2) return d;
+  if(d < 0) return d;
+  if(d == 0x7d) {
+    EscapedFlag = 0x20;
+    d = GetByte();
+    if(d < 0) return d;
+  }
+  d ^= EscapedFlag;
+  EscapedFlag = 0;
+  return d;
+}
