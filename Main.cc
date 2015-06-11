@@ -57,10 +57,8 @@ int main(int argc, char **argv) {
   
   unsigned char avrcmd = 0;
   if(!strcmp(cmd, "irsend")) avrcmd = CmdIRSend;
-  if(!strcmp(cmd, "irrec")) avrcmd = CmdIRRecord;
   if(!strcmp(cmd, "hactrl")) avrcmd = CmdHACtrl;
-  if(!strcmp(cmd, "hastat")) avrcmd = CmdHAStat;
-  if(!strcmp(cmd, "adc")) avrcmd = CmdGetADC;
+  if(!strcmp(cmd, "stat")) avrcmd = CmdGetStatus;
   if(!strcmp(cmd, "i2cw")) avrcmd = CmdI2CWrite;
   if(!strcmp(cmd, "i2cr")) avrcmd = CmdI2CRead;
   if(!strcmp(cmd, "led")) avrcmd = CmdLEDTape;
@@ -329,47 +327,25 @@ int main(int argc, char **argv) {
     }
   }
 
-  if(avrcmd == CmdGetADC) { // adc
+  if(avrcmd == CmdGetStatus) { // stat
     unsigned char retBuf[256];
     int ret = XBee.SendAVRCommand(addrl, avrcmd, NULL, 0, retBuf, 256);
     if((ret < 0) || (retBuf[0] & 0x80)) {
       fprintf(stderr, "\nret=%02x\n", ret);
     } else {
-      for(int i = 1; i < ret; i += 2) {
-        fprintf(stderr, "%dmV ", ((retBuf[i] << 8) | retBuf[i + 1]) * 3300 / 4096);
-      }
       fprintf(stderr, "\n");
     }
-    XBee.Finalize();
-    fprintf(stderr, "Complete.\n");
-    return Success;
-  }    
-  
-  if(avrcmd == CmdIRRecord) { // irrec
-    if(argc < 5) {
-      XBee.Finalize();
-      fprintf(stderr, "Illegal Parameter\n");
-      return Error;
-    }
-    
-    unsigned char buf[1];
-    buf[0] = 10;
-    unsigned char retBuf[256];
-    int ret = XBee.SendAVRCommand(addrl, avrcmd, buf, 1, retBuf, 256);
-    if((ret < 0) || (retBuf[0] & 0x80)) {
-      fprintf(stderr, "\nret=%02x\n", ret);
-    } else {
-      for(int i = 1; i < ret; i++) {
-        if((i % 16) == 1) fprintf(stderr, "\n");
-        fprintf(stderr, "%02x ", retBuf[i]);
-      }
-      fprintf(stderr, "\n");
-      FILE *fp = fopen(argv[4], "w");
-      if(fp) {
-        fwrite(retBuf + 1, 1, ret - 1, fp);
-        fclose(fp);
+
+    while(1) {
+      unsigned char retBuf[256];
+      int size = XBee.ReceivePacket(retBuf);
+      if((size > 0) && (retBuf[13] == CmdStatusChangeNotification)) {
+        for(int i = 15; i < size; i++) fprintf(stderr, "%02x ", retBuf[i]);
+        fprintf(stderr, "\n");
       }
     }
+
+
     XBee.Finalize();
     fprintf(stderr, "Complete.\n");
     return Success;

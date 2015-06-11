@@ -1,6 +1,6 @@
 /*
  HA-1 Command.h
-
+ 
  Copyright: Copyright (C) 2013 Mitsuru Nakada All Rights Reserved.
  License: GNU GPL v2
  */
@@ -19,27 +19,28 @@ enum Command {
   CmdEraseFW                   = 0x05,
   CmdReadMemory                = 0x08,
   CmdReadFlash                 = 0x09,
-
+  
   CmdIRSend                    = 0x10 | CmdContinue,
-  CmdGetGPI                    = 0x11,
+  CmdGPOCtrl                   = 0x11,
   CmdHACtrl                    = 0x12,
-  CmdHAStat                    = 0x13,
-  CmdGetADC                    = 0x14,
+  CmdSWCtrl                    = 0x13,
+  CmdGetStatus                 = 0x14,
   CmdLEDTape                   = 0x15,
   CmdValidateHA2               = 0x16,
-  CmdIRRecord                  = 0x17,
   CmdGetADCData                = 0x18,
   CmdKeypadCtrl                = 0x19,
-
+  CmdMotorCtrl                 = 0x1a,
+  
   CmdI2CWrite                  = 0x20,
   CmdI2CRead                   = 0x21,
-
+  
   CmdRebootNotification        = 0x80,
   CmdBootModeNotification      = 0x82,
-
-  CmdStatusChangeNotification  = 0x92,
-  CmdIRReceiveNotification     = 0x94,
+  
+  CmdIRReceiveNotification     = 0x90,
+  CmdStatusChangeNotification  = 0x94,
   CmdKeypadNotification        = 0x99,
+  CmdMotorNotification         = 0x9a,
 };
 
 static const byte SeqFinal         = (1 << 7);
