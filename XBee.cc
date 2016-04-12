@@ -16,6 +16,15 @@
 #include "XBee.h"
 #include "Error.h"
 
+const XBee::BaudRateTableSt XBee::BaudRateTable[] =
+{
+  { B9600,   9600 },
+  { B19200,  19200 },
+  { B38400,  38400 },
+  { B57600,  57600 },
+  { B115200, 115200 },
+};
+
 XBee::XBee() {
 
   FrameID = 1;
@@ -44,27 +53,27 @@ int XBee::Initialize(const char *device) {
   
   Timeout = 200;
   int error = Error;
-  BaudRate = B9600;
+  BaudRate = 9600;
   if(SetBaudRate(BaudRate)) return Error;
   error = CheckMode();
   if(error) {
-    BaudRate = B115200;
+    BaudRate = 115200;
     if(SetBaudRate(BaudRate)) return Error;
     error = CheckMode();
   }
   if(error) error = CheckBootMode();
   if(error) {
-    BaudRate = B38400;
+    BaudRate = 38400;
     if(SetBaudRate(BaudRate)) return Error;
     error = CheckMode();
   }
   if(error) {
-    BaudRate = B19200;
+    BaudRate = 19200;
     if(SetBaudRate(BaudRate)) return Error;
     error = CheckMode();
   }
   if(error) {
-    BaudRate = B57600;
+    BaudRate = 57600;
     if(SetBaudRate(BaudRate)) return Error;
     error = CheckMode();
   }
@@ -84,12 +93,18 @@ void XBee::Finalize() {
 }
 
 int XBee::SetBaudRate(int bps) {
-  
-  if(LogEnable) fprintf(stderr, "SetBaudRate %d\n", bps);
+
+  int baudrate = 0;
+  for(int i = 0; i < sizeof(BaudRateTable) / sizeof(BaudRateTableSt); i++) {
+    if(bps == BaudRateTable[i].BPS) baudrate = BaudRateTable[i].BaudRate;
+  }
+  if(LogEnable) fprintf(stderr, "SetBaudRate %d -> %d\n", bps, baudrate);
+  if(!baudrate) return Error;
+
   struct termios current_termios;
   tcgetattr(UartFd, &current_termios);
   cfmakeraw(&current_termios);
-  cfsetspeed(&current_termios, bps);
+  cfsetspeed(&current_termios, baudrate);
   current_termios.c_cflag &= ~(PARENB | PARODD);
   current_termios.c_cflag = (current_termios.c_cflag & ~CSIZE) | CS8;
   current_termios.c_cflag &= ~(CRTSCTS);
@@ -108,23 +123,31 @@ int XBee::SetBaudRate(int bps) {
 int XBee::CheckMode() {
   
   Mode = Mode_Unknown;
-  char buf[256];
-  SendText("+++");
-  int size = ReceiveText(buf, 256);
-  if((size == 2) && !strcmp(buf, "OK")) { // AT mode
-    Mode= Mode_AT;
-    SendText("ATVR\r");
-    size = ReceiveText(buf, 256);
-    if(size < 0) return size;
+
+  unsigned char retBuf[16];
+  int size = SendATCommand(0, "AP", NULL, 0, retBuf, 16);
+  if(size == 2) {
+    Mode = Mode_API;
+    if(retBuf[1] == 2) Mode = Mode_API2;
     return Success;
   }
-  
-  unsigned char retBuf[16];
-  size = SendATCommand(0, "AP", NULL, 0, retBuf, 16);
-  if(size != 2) return Error;
-  Mode = Mode_API;
-  if(retBuf[1] == 2) Mode = Mode_API2;
-  return Success;
+
+  char buf[256];
+  SendText("+++");
+  size = ReceiveText(buf, 256);
+  if((size == 2) && !strcmp(buf, "OK")) { // AT mode
+    Mode= Mode_AT;
+    SendText("ATAP\r");
+    size = ReceiveText(buf, 256);
+    if(size < 0) return size;
+    if(!strncmp(buf, "0", 1)) return Success;
+    if(!strncmp(buf, "1", 1)) Mode = Mode_API;
+    if(!strncmp(buf, "2", 1)) Mode = Mode_API2;
+    SendText("ATCN\r");
+    size = ReceiveText(buf, 256);
+    if(size < 0) return size;
+  }
+  return Error;
 }
 
 int XBee::CheckBootMode() {
@@ -388,13 +411,13 @@ int XBee::ReceivePacket(unsigned char *buf) {
 
 int XBee::EnterBootMode() {
 
-  if(Mode == 3) return Success;
-  if(Mode == 1) {
+  if(Mode == Mode_Boot) return Success;
+  if(Mode == Mode_AT) {
     char buf[256];
     SendText("AT%P\r");
     int size = ReceiveText(buf, 256);
     if(size < 0) return size;
-  } else if(Mode == 2) {
+  } else if((Mode == Mode_API) || (Mode == Mode_API2)) {
     unsigned char res[256];
     int size = SendATCommand(0, "%P");
     if(size < 0) return size;

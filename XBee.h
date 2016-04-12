@@ -41,7 +41,6 @@ public:
   void EnableLog() {LogEnable = 1;};
   void DisableLog() {LogEnable = 0;};
   void SetTimeout(int t) {Timeout = t;};
-  
 
 private:
   int CheckMode();
@@ -67,7 +66,12 @@ private:
   static const unsigned char NAK = 0x15;
   static const unsigned char CAN = 0x18;
   static const unsigned char NAKC = 0x43;
- 
+
+  struct BaudRateTableSt {
+    int  BaudRate;
+    int  BPS;
+  };
+  static const BaudRateTableSt BaudRateTable[];
 };
 
 #endif // __XBee_h__
