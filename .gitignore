@@ -3,8 +3,8 @@
 *.swp
 *~.nib
 XBeeCtrl
-  
+ 
 # Xcode project files except for the project file
-*.xcodeproj/
-!*.xcodeproj/project.pbxproj
+*.xcodeproj/project.xcworkspace
+*.xcodeproj/xcuserdata
 
